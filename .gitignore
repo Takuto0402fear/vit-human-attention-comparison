@@ -160,3 +160,21 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# ─── Reproduction: large data files ──────────────────────────
+# Model weights (~3.5 GB for 36 checkpoints + ~830 MB demo)
+trained_model_weights/
+*.pth
+
+# Datasets (frames, gaze data, preprocessed)
+dataset/
+*.npz
+*.mat
+
+# Partial computation results
+partial/
+
+# Temp / intermediate notebooks
+*_executed.ipynb
+*_run.ipynb
+*_temp/

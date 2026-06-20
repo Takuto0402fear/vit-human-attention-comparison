@@ -1,0 +1,43 @@
+# Reproduction environment for:
+# Yamamoto et al. "Emergence of Human-Like Attention in Self-Supervised Vision Transformers"
+#
+# conda create -p D:/conda_envs/vit-repro python=3.11 -y
+# conda activate D:/conda_envs/vit-repro
+#
+# === PyTorch (install first, separately) ===
+# GPU: GTX 1060 (Pascal, SM 6.1) — requires cu126 build (last to include sm_61)
+# pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu126
+#
+# === Then install the rest ===
+# pip install -r requirements.txt
+
+# Core deep learning
+kornia==0.8.3
+
+# Scientific computing
+numpy==2.4.4
+scipy==1.17.1
+pandas==3.0.3
+scikit-learn==1.9.0
+scikit-image==0.26.0
+
+# Image / video processing
+opencv-python==4.13.0.92
+pillow==12.2.0
+
+# Visualization
+matplotlib==3.11.0
+seaborn==0.13.2
+
+# Utilities
+tqdm==4.68.3
+jupyter==1.1.1
+
+# ---------------------------------------------------------
+# Deferred (not needed for demo ~ Fig.2c reproduction):
+#   pyper        — R interface for NbClust (attention clustering)
+#   pingouin     — repeated-measures ANOVA (viewing proportion stats)
+#   statsmodels  — statistical modelling
+# Install later with:
+#   pip install pyper pingouin statsmodels
+# ---------------------------------------------------------

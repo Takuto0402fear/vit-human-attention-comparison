@@ -1,0 +1,37 @@
+# Conda environment for reproducing Yamamoto et al.
+# "Emergence of Human-Like Attention in Self-Supervised Vision Transformers"
+#
+# Created on: Windows 11 Pro, GTX 1060 (Pascal, SM 6.1)
+# Python installed via: conda create -p D:/conda_envs/vit-repro python=3.11 -y
+#
+# To recreate:
+#   conda create -p <path> python=3.11 -y
+#   conda activate <path>
+#   pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu126
+#   pip install -r requirements.txt
+#
+# Note: cu126 is the last PyTorch CUDA build that includes sm_61 (Pascal).
+# For newer GPUs (Turing+), cu128 or later also works.
+
+name: vit-repro
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - pip:
+    - torch==2.8.0+cu126
+    - torchvision==0.23.0+cu126
+    - torchaudio==2.8.0+cu126
+    - kornia==0.8.3
+    - numpy==2.4.4
+    - scipy==1.17.1
+    - pandas==3.0.3
+    - scikit-learn==1.9.0
+    - scikit-image==0.26.0
+    - opencv-python==4.13.0.92
+    - pillow==12.2.0
+    - matplotlib==3.11.0
+    - seaborn==0.13.2
+    - tqdm==4.68.3
+    - jupyter==1.1.1
+    - osfclient==0.0.5

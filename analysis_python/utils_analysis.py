@@ -73,23 +73,27 @@ def model_load(training_method, trial_num, depth,
     if training_method == "dino":
         model = vits.__dict__[arch](patch_size=patch_size, depth=depth, drop_path_rate=0.1)
         model.head = DINOHead(model.embed_dim, out_dim, use_bn=False, norm_last_layer=True) #, nlayers=3
-        model_state_dict = {}
-        for key, value in checkpoint["teacher"].items():
-            if "projection_head" in key:
-                model_state_dict[key.replace("projection_head", "mlp")] = value
-            elif "prototypes" in key:
-                model_state_dict[key.replace("prototypes", "last_layer")] = value
-            else:
-                model_state_dict[key] = value
-
-        model_state_dict = {k.replace("module.", ""): v for k, v in model_state_dict.items()}
-        model_state_dict = {k.replace("backbone.", ""): v for k, v in model_state_dict.items()}
+        if "teacher" in checkpoint:
+            # Full training checkpoint format
+            model_state_dict = {}
+            for key, value in checkpoint["teacher"].items():
+                if "projection_head" in key:
+                    model_state_dict[key.replace("projection_head", "mlp")] = value
+                elif "prototypes" in key:
+                    model_state_dict[key.replace("prototypes", "last_layer")] = value
+                else:
+                    model_state_dict[key] = value
+            model_state_dict = {k.replace("module.", ""): v for k, v in model_state_dict.items()}
+            model_state_dict = {k.replace("backbone.", ""): v for k, v in model_state_dict.items()}
+        else:
+            # Direct state_dict format (e.g. from OSF release)
+            model_state_dict = checkpoint
         model.load_state_dict(model_state_dict, strict=True)
     elif training_method == "supervised":
         # deit_small_patch16_224
         model = vits.__dict__[arch](patch_size=patch_size, depth=depth, drop_path_rate=0.1)
         model.head = nn.Linear(model.embed_dim, num_classes)
-        model_state_dict = checkpoint["model"]
+        model_state_dict = checkpoint["model"] if "model" in checkpoint else checkpoint
         model.load_state_dict(model_state_dict, strict=True)    
     else:
         assert False, "training_method must be dino or supervised"
