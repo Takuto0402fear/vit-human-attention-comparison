@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+
+# Data / model weights / large outputs (never push to GitHub)
+data/
+datasets/
+*.npz
+*.npy
+*.pth
+*.ckpt
+*.h5
+
+# Images (large)
+results/*.png
+results/*.jpg
+
+# Misc outputs
+output*/
+*.log
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Windows special device name
+nul
