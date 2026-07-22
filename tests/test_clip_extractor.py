@@ -19,10 +19,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from clip_extractor import (
     CLIP_DEPTH, CLIP_HEADS, CLIP_NATIVE_GRID, CLIP_NUM_TOKENS,
-    CLIP_PATCH_SIZE, assert_vit_b16_shape, load_clip_vit_b16,
+    CLIP_PATCH_SIZE, assert_vit_b16_shape, load_clip_vit_b16, load_osie_image_tensor,
 )
 from lib.clip_vit import (
-    cls_to_patch_grid, interpolate_patch_pos_embed, visual_forward_with_attention,
+    cls_to_patch_grid, interpolate_patch_pos_embed, patch_grid_from_image_hw,
+    visual_forward_with_attention, visual_forward_with_cls_patch_attention,
 )
 
 STIM_PATH = os.path.join(
@@ -118,3 +119,79 @@ class TestPositionEmbeddingInterpolation:
         bad_pos = torch.randn(200, 8)  # 199 patch tokens, not a perfect square
         with pytest.raises(ValueError):
             interpolate_patch_pos_embed(bad_pos, (14, 14))
+
+
+# ==== Phase 2: OSIE single image, non-square input ====
+@pytest.fixture(scope="module")
+def osie_padded_tensor(loaded_model):
+    model, _ = loaded_model
+    device = next(model.parameters()).device
+    tensor, orig_hw, pad_hw = load_osie_image_tensor(STIM_PATH, CLIP_PATCH_SIZE)
+    return tensor.to(device), orig_hw, pad_hw
+
+
+@pytest.fixture(scope="module")
+def osie_layerwise_result(loaded_model, osie_padded_tensor):
+    model, _ = loaded_model
+    tensor, _, pad_hw = osie_padded_tensor
+    grid_hw = patch_grid_from_image_hw(pad_hw[0], pad_hw[1], CLIP_PATCH_SIZE)
+    pos_interp = interpolate_patch_pos_embed(model.visual.positional_embedding, grid_hw)
+    with torch.inference_mode():
+        pooled, cls_patch_maps, full_row_sums = visual_forward_with_cls_patch_attention(
+            model.visual, tensor.type(model.dtype), grid_hw, pos_embed=pos_interp)
+    return pooled, cls_patch_maps, full_row_sums, grid_hw
+
+
+class TestOsiePaddingAndGrid:
+    def test_padding_matches_dino_geometry(self, osie_padded_tensor):
+        # OSIE stimuli are 800x600 (W,H); 600 is not a multiple of 16, so
+        # only the height gets padded (bottom), matching
+        # vit_extractor.py::_pad_to_patch exactly.
+        _, orig_hw, pad_hw = osie_padded_tensor
+        assert orig_hw == (600, 800)
+        assert pad_hw == (608, 800)
+
+    def test_grid_and_token_count(self, osie_padded_tensor):
+        _, _, pad_hw = osie_padded_tensor
+        grid_h, grid_w = patch_grid_from_image_hw(pad_hw[0], pad_hw[1], CLIP_PATCH_SIZE)
+        assert (grid_h, grid_w) == (38, 50)
+        assert grid_h * grid_w + 1 == 1901
+
+    def test_pos_embed_interpolated_shape_and_cls_untouched(self, loaded_model):
+        model, _ = loaded_model
+        pos = model.visual.positional_embedding.detach()
+        pos_interp = interpolate_patch_pos_embed(pos, (38, 50))
+        assert tuple(pos_interp.shape) == (1901, 768)
+        torch.testing.assert_close(pos_interp[0], pos[0])
+
+
+class TestOsieLayerwiseAttention:
+    def test_shape_is_12_38_50(self, osie_layerwise_result):
+        _, cls_patch_maps, _, grid_hw = osie_layerwise_result
+        assert grid_hw == (38, 50)
+        stacked = torch.stack(cls_patch_maps, dim=1)
+        assert tuple(stacked.shape[1:]) == (12, 38, 50)
+
+    def test_full_row_sums_to_one(self, osie_layerwise_result):
+        _, _, full_row_sums, _ = osie_layerwise_result
+        assert len(full_row_sums) == 12
+        for row_sum in full_row_sums:
+            torch.testing.assert_close(
+                row_sum, torch.ones_like(row_sum), rtol=1e-3, atol=1e-3)
+
+    def test_no_nan_or_inf(self, osie_layerwise_result):
+        _, cls_patch_maps, full_row_sums, _ = osie_layerwise_result
+        for m in cls_patch_maps:
+            assert not torch.isnan(m).any()
+            assert not torch.isinf(m).any()
+        for r in full_row_sums:
+            assert not torch.isnan(r).any()
+            assert not torch.isinf(r).any()
+
+    def test_bilinear_resize_to_800x600_preserves_axes(self, osie_layerwise_result):
+        _, cls_patch_maps, _, grid_hw = osie_layerwise_result
+        stacked = torch.stack(cls_patch_maps, dim=1)  # (1, 12, 38, 50)
+        resized = torch.nn.functional.interpolate(
+            stacked.reshape(12, 1, *grid_hw), size=(600, 800),
+            mode="bilinear", align_corners=False)
+        assert tuple(resized.shape) == (12, 1, 600, 800)
