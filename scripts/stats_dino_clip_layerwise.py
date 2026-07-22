@@ -621,7 +621,16 @@ def main():
         },
         "independent_two_sample_tests_used": False,
         "test_used": "scipy.stats.wilcoxon (paired signed-rank), duplicated from scripts/stats_and_plots_expA.py::wilcoxon_test",
-        "effect_size": "paired rank-biserial correlation, r = |1 - 2*T / (n*(n+1)/2)|",
+        "effect_size": (
+            "paired rank-biserial correlation, r = |1 - 2*T / (n*(n+1)/2)|, where T is "
+            "scipy.stats.wilcoxon's returned statistic (min of the summed positive/negative "
+            "signed ranks) and n is the number of non-zero paired differences. "
+            "SIGN CONVENTION: r is always reported as an absolute value (0 = no consistent "
+            "direction, 1 = every non-zero-difference image agrees in sign) -- it does NOT "
+            "indicate which direction the effect runs. Direction must be read from the "
+            "accompanying mean_diff / median_diff sign (or expected_direction/"
+            "observed_direction columns in clip_m_shape_contrasts.csv)."
+        ),
         "peak_analyses_are_exploratory": True,
         "representative_images_not_used_for_statistics": (
             "The 3 images selected in scripts/plot_dino_clip_layerwise.py "
@@ -708,14 +717,36 @@ def write_summary(a1, a2, a3, a4, a5, n_images):
     lines.append("\n## 5. Max-performance difference between models (EXPLORATORY)\n")
     lines.append("Peak layers are selected from the same 700-image sample being compared "
                  "-- this is a descriptive, data-driven comparison, not a confirmatory test.\n")
+    lines.append(
+        "**P(DINO>CLIP) is a bootstrap proportion, not a p-value**: it is the fraction "
+        "of the 10,000 image-level bootstrap resamples in which DINO's own peak-layer "
+        "value exceeded CLIP's own peak-layer value in that same resample. No null-hypothesis "
+        "significance test is performed for this analysis; only the effect (observed/bootstrap "
+        "mean difference) and its 95% CI are used to draw conclusions.\n")
     lines.append("| metric | DINO peak (layer, value) | CLIP peak (layer, value) | observed diff | "
-                 "bootstrap mean diff | 95% CI | P(DINO>CLIP) |")
+                 "bootstrap mean diff | 95% CI | P(DINO>CLIP), bootstrap proportion |")
     lines.append("|---|---|---|---|---|---|---|")
     for r in a5:
         lines.append(f"| {r['metric']} | L{r['dino_peak_layer']} ({r['dino_peak_value']:.4f}) | "
                      f"L{r['clip_peak_layer']} ({r['clip_peak_value']:.4f}) | "
                      f"{r['observed_max_difference']:+.4f} | {r['bootstrap_mean_diff']:+.4f} | "
                      f"[{r['ci_lo']:+.4f}, {r['ci_hi']:+.4f}] | {r['proportion_dino_greater']:.3f} |")
+
+    lines.append("")
+    for r in a5:
+        ci_includes_zero = r["ci_lo"] <= 0.0 <= r["ci_hi"]
+        if ci_includes_zero:
+            lines.append(
+                f"- **{r['metric']}**: the 95% CI [{r['ci_lo']:+.4f}, {r['ci_hi']:+.4f}] "
+                f"includes 0 -- a clear difference between the models' peak performance "
+                f"cannot be established (not \"no difference\"; the data are simply "
+                f"insufficient to rule out zero or either sign).")
+        else:
+            favored = "DINO" if r["bootstrap_mean_diff"] > 0 else "CLIP"
+            lines.append(
+                f"- **{r['metric']}**: the 95% CI [{r['ci_lo']:+.4f}, {r['ci_hi']:+.4f}] "
+                f"excludes 0 -- peak performance favors {favored}.")
+    lines.append("")
 
     with open(os.path.join(OUT_DIR, "statistics_summary.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
